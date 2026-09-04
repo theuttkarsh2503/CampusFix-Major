@@ -6,6 +6,7 @@ const ROLES = {
 
 const COMPLAINT_CATEGORIES = [
   "Infrastructure",
+  "HVAC",
   "Electrical",
   "Cleanliness",
   "IT & Technical",

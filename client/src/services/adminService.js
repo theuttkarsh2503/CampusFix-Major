@@ -1,7 +1,12 @@
 import api from "./api"
 
-export const getAdminDashboardRequest = async () => {
-  const response = await api.get("/admin/dashboard")
+export const getAdminDashboardRequest = async (params = {}) => {
+  const response = await api.get("/admin/dashboard", { params })
+  return response.data.data
+}
+
+export const getPredictiveMaintenanceRequest = async (params = {}) => {
+  const response = await api.get("/admin/predictive-maintenance", { params })
   return response.data.data
 }
 

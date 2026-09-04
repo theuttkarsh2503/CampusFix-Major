@@ -12,10 +12,10 @@ const TopNavbar = ({ user, onLogout }) => {
   const notificationPath = user?.role === "admin" ? "/admin/notifications" : user?.role === "staff" ? "/staff/notifications" : "/app/notifications"
 
   return (
-    <header className="mb-6 flex items-center justify-between rounded-2xl border border-brand-border bg-white/90 px-6 py-4 shadow-lg backdrop-blur">
-      <h1 className="font-heading text-xl font-bold text-brand-text">Welcome, {user?.name || "User"}!</h1>
+    <header className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-brand-border bg-white/90 px-3 py-3 shadow-lg backdrop-blur sm:mb-6 sm:px-6 sm:py-4">
+      <h1 className="min-w-0 truncate font-heading text-base font-bold text-brand-text sm:text-xl">Welcome, {user?.name || "User"}!</h1>
 
-      <div className="relative flex items-center gap-4">
+      <div className="relative flex shrink-0 items-center gap-2 sm:gap-4">
         <Link
           to={notificationPath}
           className={`relative rounded-full border border-brand-border p-2.5 text-brand-primary transition hover:bg-blue-50 ${

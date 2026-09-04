@@ -21,6 +21,25 @@ body {
     radial-gradient(circle at 80% 90%, rgba(59, 130, 246, 0.2), transparent 40%), #f8fafc;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (display-mode: standalone) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 #root {
   min-height: 100vh;
 }

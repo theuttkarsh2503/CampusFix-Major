@@ -21,6 +21,7 @@ const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 const { sendSuccess } = require("./utils/apiResponse");
 const logger = require("./utils/logger");
+const { startSlaNotificationMonitor } = require("./services/slaNotificationService");
 
 const app = express();
 const server = http.createServer(app);
@@ -116,6 +117,7 @@ const bootstrap = async () => {
     }
 
     await connectDB();
+    startSlaNotificationMonitor(io);
     server.listen(PORT, () => {
       logger.info(`Server listening on port ${PORT}`);
     });

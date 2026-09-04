@@ -1,4 +1,5 @@
 const path = require("path");
+const crypto = require("crypto");
 const multer = require("multer");
 const AppError = require("../utils/AppError");
 
@@ -8,7 +9,7 @@ const storage = multer.diskStorage({
     const ext = path.extname(file.originalname).toLowerCase();
     const baseName = path.basename(file.originalname, ext);
     const safeName = baseName.replace(/[^\w\-]/g, "_").slice(0, 40);
-    cb(null, `${Date.now()}-${safeName}${ext}`);
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName || "attachment"}${ext}`);
   },
 });
 

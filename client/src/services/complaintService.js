@@ -32,8 +32,43 @@ export const createComplaintRequest = async (payload) => {
   return response.data.data
 }
 
+export const exportComplaintsCsvRequest = async (params = {}) => {
+  const response = await api.get("/complaints/export/csv", { params, responseType: "blob" })
+  return response.data
+}
+
+export const classifyComplaintRequest = async (payload) => {
+  const response = await api.post("/complaints/classify", payload)
+  return response.data.data
+}
+
+export const findDuplicateComplaintsRequest = async (payload) => {
+  const response = await api.post("/complaints/duplicates", payload)
+  return response.data.data
+}
+
 export const assignComplaintRequest = async (id, payload) => {
   const response = await api.put(`/complaints/${id}/assign`, payload)
+  return response.data.data
+}
+
+export const updateComplaintDepartmentRequest = async (id, department) => {
+  const response = await api.put(`/complaints/${id}/department`, { department })
+  return response.data.data
+}
+
+export const updateComplaintPriorityRequest = async (id, priority) => {
+  const response = await api.put(`/complaints/${id}/priority`, { priority })
+  return response.data.data
+}
+
+export const escalateComplaintRequest = async (id, reason = "") => {
+  const response = await api.post(`/complaints/${id}/escalate`, { reason })
+  return response.data.data
+}
+
+export const submitComplaintFeedbackRequest = async (id, payload) => {
+  const response = await api.post(`/complaints/${id}/feedback`, payload)
   return response.data.data
 }
 

@@ -76,6 +76,17 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user])
 
+  const markRead = useCallback(async (id) => {
+    if (!user || !id) return
+    try {
+      await markNotificationsReadRequest({ ids: [id] })
+      setNotifications((prev) => prev.map((item) => (String(item.id || item._id) === String(id) ? { ...item, isRead: true } : item)))
+      setMeta((prev) => ({ ...prev, unread: Math.max(0, (prev.unread || 0) - 1) }))
+    } catch {
+      // Keep the notification visible if marking it read fails.
+    }
+  }, [user])
+
   const value = useMemo(
     () => ({
       notifications,
@@ -84,8 +95,9 @@ export const NotificationProvider = ({ children }) => {
       socketConnected,
       refreshNotifications: loadNotifications,
       markAllRead,
+      markRead,
     }),
-    [notifications, meta.unread, loading, socketConnected, loadNotifications, markAllRead],
+    [notifications, meta.unread, loading, socketConnected, loadNotifications, markAllRead, markRead],
   )
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>

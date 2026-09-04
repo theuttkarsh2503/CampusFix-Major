@@ -9,14 +9,14 @@ const DashboardShell = ({ navItems }) => {
   const { user, logout } = useAuth()
 
   return (
-    <div className="flex min-h-screen bg-brand-bg p-4 md:p-6">
+    <div className="flex min-h-screen overflow-x-hidden bg-brand-bg p-3 sm:p-4 md:p-6">
       <div className="hidden lg:block">
         <Sidebar navItems={navItems} onLogout={logout} />
       </div>
 
       <div className="flex-1 lg:pl-6">
         <TopNavbar user={user} onLogout={logout} />
-        <div className="mb-4 flex gap-2 overflow-x-auto lg:hidden">
+        <nav className="mb-4 grid grid-cols-2 gap-2 lg:hidden" aria-label="Mobile navigation">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -32,7 +32,7 @@ const DashboardShell = ({ navItems }) => {
               {item.label}
             </NavLink>
           ))}
-        </div>
+        </nav>
         <MotionMain
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}

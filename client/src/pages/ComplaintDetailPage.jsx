@@ -7,7 +7,7 @@ import Input from "../components/ui/Input"
 import StatusBadge from "../components/ui/StatusBadge"
 import Loader from "../components/ui/Loader"
 import { useAuth } from "../context/AuthContext"
-import { getComplaintByIdRequest, updateComplaintStatusRequest } from "../services/complaintService"
+import { escalateComplaintRequest, getComplaintByIdRequest, submitComplaintFeedbackRequest, updateComplaintStatusRequest } from "../services/complaintService"
 import { addCommentRequest, getCommentsRequest } from "../services/commentService"
 import { getSocketBaseUrl } from "../services/api"
 import { formatDateTime, normalizeStatus } from "../utils/format"
@@ -50,6 +50,11 @@ const ComplaintDetailPage = () => {
   const [resolutionNotes, setResolutionNotes] = useState("")
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [postingComment, setPostingComment] = useState(false)
+  const [escalating, setEscalating] = useState(false)
+  const [rating, setRating] = useState(0)
+  const [feedback, setFeedback] = useState("")
+  const [resolvedSuccessfully, setResolvedSuccessfully] = useState(null)
+  const [submittingFeedback, setSubmittingFeedback] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -62,6 +67,9 @@ const ComplaintDetailPage = () => {
       setComplaint(complaintData)
       setComments(commentData)
       setResolutionNotes(complaintData?.resolutionNotes || "")
+      setRating(complaintData?.rating || 0)
+      setFeedback(complaintData?.feedback || "")
+      setResolvedSuccessfully(complaintData?.resolvedSuccessfully ?? null)
     } catch (err) {
       setError(extractErrorMessage(err))
     } finally {
@@ -144,6 +152,29 @@ const ComplaintDetailPage = () => {
     }
   }
 
+  const onEscalate = async () => {
+    try {
+      setEscalating(true)
+      setComplaint(await escalateComplaintRequest(id, "SLA or operational review requested."))
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setEscalating(false)
+    }
+  }
+
+  const onSubmitFeedback = async () => {
+    if (!rating || resolvedSuccessfully === null) return
+    try {
+      setSubmittingFeedback(true)
+      setComplaint(await submitComplaintFeedbackRequest(id, { rating, feedback, resolvedSuccessfully }))
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setSubmittingFeedback(false)
+    }
+  }
+
   if (loading) return <Loader />
 
   if (!complaint) {
@@ -167,6 +198,9 @@ const ComplaintDetailPage = () => {
             <p className="text-sm text-brand-muted">{complaint.ticketId}</p>
           </div>
           <StatusBadge status={complaint.status} />
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${complaint.slaStatus === "BREACHED" ? "bg-red-100 text-red-700" : complaint.slaStatus === "DUE_SOON" ? "bg-amber-100 text-amber-700" : complaint.slaStatus === "RESOLVED" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+            {complaint.slaStatus === "BREACHED" ? "SLA Breached" : complaint.slaStatus === "DUE_SOON" ? "Due Soon" : complaint.slaStatus === "RESOLVED" ? "SLA Resolved" : "On Track"}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 gap-3 rounded-xl border border-brand-border bg-slate-50 p-4 md:grid-cols-5">
@@ -193,10 +227,18 @@ const ComplaintDetailPage = () => {
             <span className="font-semibold text-brand-text">Category:</span> {complaint.category}
           </p>
           <p>
-            <span className="font-semibold text-brand-text">Location:</span> {complaint.location}
+            <span className="font-semibold text-brand-text">Department:</span> {complaint.department || "Not assigned"}
           </p>
           <p>
-            <span className="font-semibold text-brand-text">Priority:</span> {PRIORITY_LABELS[complaint.priority] || complaint.priority}
+            <span className="font-semibold text-brand-text">Location:</span> {complaint.location}
+          </p>
+          {complaint.building || complaint.floor || complaint.area ? (
+            <p>
+              <span className="font-semibold text-brand-text">Campus location:</span> {[complaint.building, complaint.floor, complaint.area].filter(Boolean).join(" / ")}
+            </p>
+          ) : null}
+          <p>
+            <span className="font-semibold text-brand-text">Priority:</span> {PRIORITY_LABELS[complaint.priority] || complaint.priority} ({complaint.prioritySource || "SYSTEM"})
           </p>
           <p>
             <span className="font-semibold text-brand-text">Assigned Staff:</span> {complaint.assignedTo?.name || "Not assigned"}
@@ -204,9 +246,43 @@ const ComplaintDetailPage = () => {
           <p>
             <span className="font-semibold text-brand-text">Created:</span> {formatDateTime(complaint.createdAt)}
           </p>
+          <p>
+            <span className="font-semibold text-brand-text">SLA deadline:</span> {complaint.slaDeadline ? formatDateTime(complaint.slaDeadline) : "Not set"}
+          </p>
+          <p>
+            <span className="font-semibold text-brand-text">Escalation:</span> {complaint.escalationLevel || 0}/2
+          </p>
         </div>
 
+        {complaint.classification?.method ? (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <p className="font-semibold">Smart classification</p>
+            <p>
+              Suggested {complaint.classification.suggestedCategory} / {complaint.classification.suggestedDepartment} / {PRIORITY_LABELS[complaint.classification.suggestedPriority] || complaint.classification.suggestedPriority}
+              {complaint.classification.confidence !== null ? ` (${complaint.classification.confidence}% confidence)` : ""}.
+            </p>
+            <p className="mt-1 text-xs text-blue-700">Priority recommendation: {PRIORITY_LABELS[complaint.classification.suggestedPriority] || complaint.classification.suggestedPriority} ({complaint.classification.suggestedPriorityConfidence || 65}% confidence).</p>
+          </div>
+        ) : null}
+
         <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-brand-text">{complaint.description}</p>
+
+        <div className="rounded-xl border border-brand-border bg-white p-4">
+          <h3 className="mb-4 font-heading text-lg font-semibold text-brand-text">Complaint Timeline</h3>
+          <div className="space-y-0">
+            {(complaint.timeline || []).map((event, index) => (
+              <div key={`${event.eventType}-${event.timestamp}-${index}`} className="relative flex gap-3 pb-5 last:pb-0">
+                {index < complaint.timeline.length - 1 ? <span className="absolute left-[7px] top-3 h-full w-px bg-brand-border" /> : null}
+                <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-brand-primary bg-white" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-brand-text">{event.title}</p>
+                  <p className="text-xs text-brand-muted">{formatDateTime(event.timestamp)} · {event.actorName || "System"}</p>
+                  {event.description ? <p className="mt-1 text-sm text-brand-muted">{event.description}</p> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {complaint.resolutionNotes ? (
           <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -251,6 +327,37 @@ const ComplaintDetailPage = () => {
                 </Button>
               ))}
             </div>
+          </div>
+        ) : null}
+        {user?.role !== ROLES.STUDENT && complaint.escalationLevel < 2 ? (
+          <Button variant="secondary" onClick={onEscalate} loading={escalating}>
+            Escalate for Review
+          </Button>
+        ) : null}
+
+        {user?.role === ROLES.STUDENT && complaint.status === "CLOSED" && String(complaint.createdBy?._id) === String(user.id) ? (
+          <div className="space-y-3 rounded-xl border border-brand-border bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-brand-text">Rate your resolution</h3>
+            {complaint.submittedAt ? (
+              <div className="space-y-1 text-sm text-emerald-700">
+                <p>Thank you for your feedback. Rating: {"★".repeat(complaint.rating)}{"☆".repeat(5 - complaint.rating)}</p>
+                <p>Problem completely resolved: {complaint.resolvedSuccessfully ? "Yes" : "No"}</p>
+                {complaint.feedback ? <p>Additional feedback: {complaint.feedback}</p> : null}
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-1" aria-label="Resolution rating">
+                  {[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" onClick={() => setRating(value)} className="text-2xl text-amber-500" aria-label={`${value} star${value > 1 ? "s" : ""}`}>{value <= rating ? "★" : "☆"}</button>)}
+                </div>
+                <p className="text-sm font-semibold text-brand-text">Was your problem completely resolved?</p>
+                <div className="flex gap-2">
+                  <Button variant={resolvedSuccessfully === true ? "primary" : "secondary"} onClick={() => setResolvedSuccessfully(true)}>Yes</Button>
+                  <Button variant={resolvedSuccessfully === false ? "primary" : "secondary"} onClick={() => setResolvedSuccessfully(false)}>No</Button>
+                </div>
+                <Input textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Additional feedback..." />
+                <Button onClick={onSubmitFeedback} loading={submittingFeedback} disabled={!rating || resolvedSuccessfully === null}>Submit Feedback</Button>
+              </>
+            )}
           </div>
         ) : null}
       </Card>

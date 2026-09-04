@@ -1,0 +1,17 @@
+{
+  "name": "CampusFix Lite",
+  "short_name": "CampusFix",
+  "description": "Campus complaint and maintenance management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

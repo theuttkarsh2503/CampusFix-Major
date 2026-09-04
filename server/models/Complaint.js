@@ -12,6 +12,7 @@ const {
 
 const LEGACY_CATEGORY_MAP = {
   maintenance: "Infrastructure",
+  hvac: "HVAC",
   facilities: "Infrastructure",
   safety: "Security & Safety",
   security: "Security & Safety",
@@ -53,6 +54,18 @@ const attachmentSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const timelineEventSchema = new mongoose.Schema(
+  {
+    eventType: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true, maxlength: 120 },
+    description: { type: String, trim: true, maxlength: 300, default: "" },
+    timestamp: { type: Date, default: Date.now },
+    actorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    actorName: { type: String, trim: true, maxlength: 80, default: "System" },
+  },
+  { _id: false },
+);
+
 const complaintSchema = new mongoose.Schema(
   {
     ticketId: { type: String, unique: true, index: true },
@@ -63,6 +76,10 @@ const complaintSchema = new mongoose.Schema(
       enum: COMPLAINT_CATEGORIES,
     },
     location: { type: String, required: true, trim: true, maxlength: 160 },
+    building: { type: String, trim: true, maxlength: 80, default: "" },
+    floor: { type: String, trim: true, maxlength: 80, default: "" },
+    area: { type: String, trim: true, maxlength: 100, default: "" },
+    department: { type: String, trim: true, maxlength: 80, default: "" },
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     status: {
       type: String,
@@ -78,17 +95,37 @@ const complaintSchema = new mongoose.Schema(
       default: [],
     },
     priority: { type: String, enum: COMPLAINT_PRIORITIES, default: "MEDIUM" },
+    prioritySource: { type: String, enum: ["USER", "SYSTEM", "ADMIN"], default: "SYSTEM" },
+    priorityConfidence: { type: Number, min: 0, max: 100, default: 65 },
+    classification: {
+      suggestedCategory: { type: String, trim: true, default: "" },
+      suggestedDepartment: { type: String, trim: true, default: "" },
+      suggestedPriority: { type: String, trim: true, default: "" },
+      confidence: { type: Number, min: 0, max: 100, default: null },
+      method: { type: String, trim: true, default: "" },
+    },
     resolutionNotes: { type: String, trim: true, maxlength: 2000, default: "" },
     isEscalated: { type: Boolean, default: false },
     escalatedReason: { type: String, trim: true, maxlength: 500, default: "" },
     resolvedAt: { type: Date, default: null },
     closedAt: { type: Date, default: null },
+    slaDeadline: { type: Date, default: null, index: true },
+    slaStatus: { type: String, enum: ["ON_TRACK", "DUE_SOON", "BREACHED", "RESOLVED"], default: "ON_TRACK" },
+    escalationLevel: { type: Number, enum: [0, 1, 2], default: 0 },
+    rating: { type: Number, min: 1, max: 5, default: null },
+    feedback: { type: String, trim: true, maxlength: 2000, default: "" },
+    resolvedSuccessfully: { type: Boolean, default: null },
+    submittedAt: { type: Date, default: null },
+    timeline: { type: [timelineEventSchema], default: [] },
   },
   { timestamps: true },
 );
 
 complaintSchema.index({ title: "text", ticketId: "text" });
 complaintSchema.index({ category: 1, createdAt: -1 });
+complaintSchema.index({ department: 1, status: 1, priority: 1, createdAt: -1 });
+complaintSchema.index({ assignedTo: 1, createdAt: -1 });
+complaintSchema.index({ location: 1, createdAt: -1 });
 
 complaintSchema.pre("validate", async function assignTicketId() {
   if (this.category) {

@@ -17,8 +17,10 @@ const SubmitComplaintPage = () => {
     try {
       await createComplaint(payload)
       setMessage("Your complaint has been submitted.")
+      return true
     } catch (err) {
       setError(extractErrorMessage(err))
+      return false
     } finally {
       setLoading(false)
     }

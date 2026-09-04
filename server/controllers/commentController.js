@@ -5,6 +5,7 @@ const { sendSuccess } = require("../utils/apiResponse");
 const asyncHandler = require("../middleware/asyncHandler");
 const { ROLES } = require("../utils/constants");
 const { pushNotification } = require("../utils/notificationService");
+const { addTimelineEvent } = require("../services/complaintTimelineService");
 
 const canAccessComplaint = (complaint, user) => {
   if (user.role === ROLES.ADMIN) return true;
@@ -31,6 +32,13 @@ const addComment = asyncHandler(async (req, res) => {
   });
 
   complaint.comments.push(comment._id);
+  addTimelineEvent(complaint, {
+    eventType: "COMMENT",
+    title: "Comment Added",
+    description: `${req.user.name} added a comment.`,
+    actorId: req.user._id,
+    actorName: req.user.name,
+  });
   await complaint.save();
 
   const io = req.app.get("io");

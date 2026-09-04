@@ -20,6 +20,7 @@ export const getDashboardRedirect = (role = "") => DASHBOARD_REDIRECTS[String(ro
 
 export const CATEGORIES = [
   "Infrastructure",
+  "HVAC",
   "Electrical",
   "Cleanliness",
   "IT & Technical",
@@ -45,6 +46,28 @@ export const PRIORITY_LABELS = {
   LOW: "Low",
   MEDIUM: "Medium",
   HIGH: "High",
+}
+
+export const DEPARTMENTS = [
+  "Electrical Maintenance",
+  "Plumbing Maintenance",
+  "HVAC/Maintenance",
+  "Civil Maintenance",
+  "IT Support",
+  "Housekeeping",
+  "Security",
+  "Maintenance",
+  "Admin Review",
+]
+
+export const CAMPUS_LOCATIONS = {
+  "Block A": ["Ground Floor", "First Floor", "Second Floor"],
+  "Block B": ["Ground Floor", "First Floor", "Second Floor"],
+  "Block C": ["Ground Floor", "First Floor", "Second Floor"],
+  Library: ["Ground Floor", "First Floor", "Second Floor"],
+  Hostel: ["Ground Floor", "First Floor", "Second Floor"],
+  Cafeteria: ["Main Area", "Kitchen", "Dining Area"],
+  "Sports Complex": ["Ground Floor", "Indoor Court", "Outdoor Area"],
 }
 
 export const STUDENT_NAV = [

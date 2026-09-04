@@ -32,7 +32,10 @@ const markNotificationsRead = asyncHandler(async (req, res) => {
   const { ids, markAll } = req.body;
 
   const query = { userId: req.user._id };
-  if (!markAll && Array.isArray(ids) && ids.length > 0) {
+  if (!markAll) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendSuccess(res, { message: "No notifications selected." });
+    }
     query._id = { $in: ids };
   }
 

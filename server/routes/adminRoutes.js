@@ -2,6 +2,7 @@ const express = require("express");
 const { body, param, query } = require("express-validator");
 const {
   getAdminDashboard,
+  getPredictiveMaintenance,
   createStaffAccount,
   getUsers,
   updateUserRole,
@@ -16,7 +17,27 @@ const router = express.Router();
 router.use(protect);
 router.use(allowRoles(ROLES.ADMIN));
 
-router.get("/dashboard", getAdminDashboard);
+router.get(
+  "/dashboard",
+  [
+    query("from").optional().isISO8601(),
+    query("to").optional().isISO8601(),
+    query("category").optional().isString(),
+    query("department").optional().isString(),
+    query("priority").optional().isString(),
+    query("status").optional().isString(),
+    query("staff").optional().isMongoId(),
+  ],
+  validateRequest,
+  getAdminDashboard,
+);
+
+router.get(
+  "/predictive-maintenance",
+  [query("months").optional().isInt({ min: 3, max: 12 })],
+  validateRequest,
+  getPredictiveMaintenance,
+);
 
 router.post(
   "/staff",

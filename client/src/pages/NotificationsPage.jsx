@@ -1,10 +1,14 @@
+import { Link } from "react-router-dom"
 import Card from "../components/ui/Card"
 import Button from "../components/ui/Button"
+import { useAuth } from "../context/AuthContext"
 import { useNotifications } from "../context/NotificationContext"
 import { formatDateTime } from "../utils/format"
 
 const NotificationsPage = () => {
-  const { notifications, unreadCount, markAllRead, loading } = useNotifications()
+  const { notifications, unreadCount, markAllRead, markRead, loading } = useNotifications()
+  const { user } = useAuth()
+  const complaintPath = user?.role === "admin" ? "/admin/complaints" : user?.role === "staff" ? "/staff/assigned" : "/app/complaints"
 
   return (
     <Card className="space-y-4">
@@ -31,7 +35,11 @@ const NotificationsPage = () => {
             }`}
           >
             <p className="text-sm font-semibold text-brand-text">{item.message}</p>
-            <p className="mt-1 text-xs text-brand-muted">{formatDateTime(item.createdAt)}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-brand-muted">
+              <span>{formatDateTime(item.createdAt)}</span>
+              {!item.isRead ? <button type="button" onClick={() => markRead(item.id || item._id)} className="font-semibold text-brand-primary hover:underline">Mark as read</button> : null}
+              {item.meta?.complaintId ? <Link to={`${complaintPath}/${item.meta.complaintId}`} className="font-semibold text-brand-primary hover:underline">View complaint</Link> : null}
+            </div>
           </div>
         ))}
       </div>

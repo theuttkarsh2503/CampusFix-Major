@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Complaint = require("../models/Complaint");
+const mongoose = require("mongoose");
 const AppError = require("../utils/AppError");
 const { sendSuccess } = require("../utils/apiResponse");
 const asyncHandler = require("../middleware/asyncHandler");
@@ -7,19 +8,53 @@ const { ROLES } = require("../utils/constants");
 const {
   buildStatusBreakdown,
   getStatusQueryAliases,
+  getPriorityQueryAliases,
 } = require("../services/complaintWorkflowService");
+const { analyzePredictiveMaintenance } = require("../services/predictiveMaintenanceService");
 
-const getAdminDashboard = asyncHandler(async (_req, res) => {
+const asList = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+
+const buildAnalyticsMatch = (query = {}) => {
+  const match = {};
+  const startDate = query.from || query.startDate;
+  const endDate = query.to || query.endDate;
+  if (startDate || endDate) {
+    match.createdAt = {};
+    if (startDate && !Number.isNaN(new Date(startDate).getTime())) match.createdAt.$gte = new Date(startDate);
+    if (endDate && !Number.isNaN(new Date(endDate).getTime())) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      match.createdAt.$lte = end;
+    }
+    if (!Object.keys(match.createdAt).length) delete match.createdAt;
+  }
+
+  const categories = asList(query.category);
+  const departments = asList(query.department);
+  const priorities = asList(query.priority);
+  const statuses = asList(query.status);
+  if (categories.length) match.category = { $in: categories };
+  if (departments.length) match.department = { $in: departments };
+  if (priorities.length) match.priority = { $in: priorities.flatMap(getPriorityQueryAliases) };
+  if (statuses.length) match.status = { $in: statuses.flatMap(getStatusQueryAliases) };
+  if (query.staff && mongoose.isValidObjectId(query.staff)) match.assignedTo = new mongoose.Types.ObjectId(query.staff);
+  return match;
+};
+
+const getAdminDashboard = asyncHandler(async (req, res) => {
   const now = new Date();
   const firstMonth = new Date(now.getFullYear(), now.getMonth() - 11, 1);
   const resolvedAndClosed = [...getStatusQueryAliases("RESOLVED"), ...getStatusQueryAliases("CLOSED")];
+  const match = buildAnalyticsMatch(req.query);
+  const activeStatuses = [...getStatusQueryAliases("OPEN"), ...getStatusQueryAliases("ASSIGNED"), ...getStatusQueryAliases("IN_PROGRESS")];
+  const scopedMatch = (extra) => ({ $and: [match, extra] });
 
-  const [total, statusRows, categoryRows, monthlyRows, staffPerformanceRows, resolutionTimeRows] = await Promise.all([
-    Complaint.countDocuments(),
-    Complaint.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
-    Complaint.aggregate([{ $group: { _id: "$category", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+  const [statusRows, categoryRows, departmentRows, monthlyRows, staffPerformanceRows, resolutionTimeRows, resolutionTimeSeriesRows, priorityRows, locationRows, slaRows, satisfactionRows] = await Promise.all([
+    Complaint.aggregate([{ $match: match }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
+    Complaint.aggregate([{ $match: match }, { $group: { _id: "$category", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    Complaint.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ["$department", "Unassigned"] }, count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
     Complaint.aggregate([
-      { $match: { createdAt: { $gte: firstMonth } } },
+      { $match: scopedMatch({ createdAt: { $gte: match.createdAt?.$gte || firstMonth } }) },
       {
         $group: {
           _id: {
@@ -32,7 +67,7 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
       { $sort: { "_id.year": 1, "_id.month": 1 } },
     ]),
     Complaint.aggregate([
-      { $match: { assignedTo: { $ne: null } } },
+      { $match: scopedMatch({ assignedTo: { $ne: null } }) },
       {
         $group: {
           _id: "$assignedTo",
@@ -47,6 +82,8 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
               $cond: [{ $in: ["$status", [...getStatusQueryAliases("ASSIGNED"), ...getStatusQueryAliases("IN_PROGRESS")]] }, 1, 0],
             },
           },
+          averageRating: { $avg: "$rating" },
+          ratingCount: { $sum: { $cond: [{ $ne: ["$rating", null] }, 1, 0] } },
         },
       },
       {
@@ -66,6 +103,8 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
           totalAssigned: 1,
           resolvedCount: 1,
           inProgressCount: 1,
+          averageRating: 1,
+          ratingCount: 1,
           completionRate: {
             $multiply: [
               {
@@ -79,12 +118,7 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
       { $sort: { completionRate: -1, totalAssigned: -1 } },
     ]),
     Complaint.aggregate([
-      {
-        $match: {
-          status: { $in: resolvedAndClosed },
-          resolvedAt: { $ne: null },
-        },
-      },
+      { $match: scopedMatch({ status: { $in: resolvedAndClosed }, resolvedAt: { $ne: null } }) },
       {
         $project: {
           resolutionHours: {
@@ -99,16 +133,39 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
         },
       },
     ]),
+    Complaint.aggregate([
+      { $match: scopedMatch({ status: { $in: resolvedAndClosed }, resolvedAt: { $ne: null } }) },
+      {
+        $project: {
+          month: { $dateToString: { format: "%Y-%m", date: "$resolvedAt" } },
+          resolutionHours: { $divide: [{ $subtract: ["$resolvedAt", "$createdAt"] }, 1000 * 60 * 60] },
+        },
+      },
+      { $group: { _id: "$month", averageResolutionHours: { $avg: "$resolutionHours" } } },
+      { $sort: { _id: 1 } },
+    ]),
+    Complaint.aggregate([{ $match: match }, { $group: { _id: "$priority", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    Complaint.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ["$building", "$location"] }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
+    Complaint.aggregate([
+      { $match: scopedMatch({ status: { $in: activeStatuses } }) },
+      { $group: { _id: null, count: { $sum: 1 }, breached: { $sum: { $cond: [{ $lt: ["$slaDeadline", now] }, 1, 0] } } } },
+    ]),
+    Complaint.aggregate([
+      { $match: scopedMatch({ rating: { $ne: null } }) },
+      { $group: { _id: "$resolvedSuccessfully", count: { $sum: 1 }, averageRating: { $avg: "$rating" } } },
+    ]),
   ]);
 
-  const statusBreakdown = buildStatusBreakdown(statusRows);
-
   const categoryBreakdown = categoryRows.map((row) => ({ name: row._id, value: row.count }));
+  const departmentBreakdown = departmentRows.map((row) => ({ name: row._id, value: row.count }));
   const monthlyComplaints = monthlyRows.map((row) => ({
     month: `${String(row._id.month).padStart(2, "0")}/${row._id.year}`,
     count: row.count,
   }));
   const averageResolutionHours = Number(resolutionTimeRows[0]?.averageResolutionHours || 0);
+  const statusBreakdown = buildStatusBreakdown(statusRows);
+  const total = statusRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const slaBreached = Number(slaRows[0]?.breached || 0);
 
   return sendSuccess(res, {
     message: "Admin dashboard fetched.",
@@ -121,13 +178,38 @@ const getAdminDashboard = asyncHandler(async (_req, res) => {
         inProgress: statusBreakdown.IN_PROGRESS,
         resolvedComplaints: statusBreakdown.RESOLVED,
         closedComplaints: statusBreakdown.CLOSED,
+        slaBreached,
+        averageResolutionHours: Number.isFinite(averageResolutionHours) ? averageResolutionHours : 0,
       },
       statusBreakdown,
       categoryBreakdown,
       monthlyComplaints,
       staffPerformance: staffPerformanceRows,
       averageResolutionHours: Number.isFinite(averageResolutionHours) ? averageResolutionHours : 0,
+      resolutionTimeSeries: resolutionTimeSeriesRows.map((row) => ({ month: row._id, averageHours: Number(row.averageResolutionHours || 0) })),
+      departmentBreakdown,
+      priorityBreakdown: priorityRows.map((row) => ({ name: row._id || "Unknown", value: row.count })),
+      locationBreakdown: locationRows.map((row) => ({ name: row._id || "Unknown", value: row.count })),
+      slaBreakdown: [
+        { name: "On Track", value: Math.max(0, Number(slaRows[0]?.count || 0) - slaBreached) },
+        { name: "Breached", value: slaBreached },
+      ],
+      satisfactionBreakdown: satisfactionRows.map((row) => ({ name: row._id === true ? "Resolved" : "Not Resolved", value: row.count, averageRating: row.averageRating })),
     },
+  });
+});
+
+const getPredictiveMaintenance = asyncHandler(async (req, res) => {
+  const months = Math.min(12, Math.max(3, Number(req.query.months) || 6));
+  const since = new Date();
+  since.setMonth(since.getMonth() - months + 1);
+  const complaints = await Complaint.find({ createdAt: { $gte: since } })
+    .select("category department building location area createdAt")
+    .lean();
+
+  return sendSuccess(res, {
+    message: "Predictive maintenance recommendations generated.",
+    data: analyzePredictiveMaintenance(complaints, { months }),
   });
 });
 
@@ -206,6 +288,7 @@ const updateUserRole = asyncHandler(async (req, res) => {
 
 module.exports = {
   getAdminDashboard,
+  getPredictiveMaintenance,
   createStaffAccount,
   getUsers,
   updateUserRole,
