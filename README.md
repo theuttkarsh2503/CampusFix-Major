@@ -60,6 +60,10 @@ Core routes:
 - Notifications: `GET /notifications`, `PUT /notifications/read`
 - Admin: `GET /admin/dashboard`, `GET /admin/users`, `POST /admin/staff`, `PUT /admin/users/:id/role`
 
+## Deploying to Vercel and Render
+
+The Vercel rewrites proxy `/api/*` and `/uploads/*` to `https://campusfix-api.onrender.com`, so the frontend can use its default `/api` base URL. The API allows `https://campus-fix-major.vercel.app` by default; set `CLIENT_URLS` in Render to add any other frontend or preview origins. The API also requires `MONGO_URI` and `JWT_SECRET` to start. Check `https://campusfix-api.onrender.com/api/v1/health` to confirm the Render service is healthy.
+
 ## Frontend Pages
 
 - Student: Login, Dashboard, Submit Complaint, My Complaints, Complaint Detail, Notifications

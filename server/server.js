@@ -27,8 +27,11 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
-const allowedOrigins =
-  process.env.CLIENT_URLS?.split(",").map((origin) => origin.trim()) || ["http://localhost:5173"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://campus-fix-major.vercel.app",
+  ...(process.env.CLIENT_URLS?.split(",").map((origin) => origin.trim()) || []),
+];
 
 app.use(
   cors({
